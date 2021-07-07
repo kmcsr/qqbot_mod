@@ -1,0 +1,39 @@
+# Gradle
+.gradle
+
+# VSCode
+.settings/
+.vscode/
+
+# Eclipse
+.checkstyle
+.classpath
+.metadata
+.settings
+.project
+*.launch
+
+# Intellij/Idea
+.factorypath
+.idea
+*.iml
+*.ipr
+*.iws
+
+# Build artifacts
+bin/
+build/
+jars/
+out/
+classes/
+target/
+
+# Librarys
+/libs
+
+# Windows
+*.db
+$RECYCLE.BIN/
+
+# Mac
+.DS_Store
