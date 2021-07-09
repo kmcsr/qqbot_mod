@@ -16,7 +16,7 @@
 1. 获取一个bot**专用**QQ号
 2. 将本mod放入**服务端文件夹**下的`mods`文件夹
 3. 通过*各种途径*获取`mirai-core-all.jar`文件, 并放入`mods/libs`文件夹
-4. 在**服务端文件夹**下创建`qqbot_mod`文件夹, 文件夹中创建`botconfig.json`文件, 配置内容详见下文
+4. 在**服务端文件夹**下创建`qqbot_mod`文件夹, 文件夹中创建`botconfig.json`文件, 配置内容详见[下文](#botconfigjson)
 5. 配置完成后请重启服务端
 
 ### 使用
@@ -32,7 +32,7 @@
 
 ## 配置文件
 > **注意:** 本mod使用**json**作为配置文件, 使用者请提前了解**json语法**
-> 使用`/qqbot reload`**(推荐)**或`/realod`命令重新加载配置文件, `/qqbot save`保存配置文件
+> 使用`/qqbot reload` **(推荐)**或`/realod`命令重新加载配置文件, `/qqbot save`保存配置文件
 
 ### botconfig.json
 - "qqid" *Number类型*: bot的QQ号

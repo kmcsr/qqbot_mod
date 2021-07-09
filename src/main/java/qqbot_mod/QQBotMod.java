@@ -8,11 +8,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import net.mamoe.mirai.Bot;
-import net.mamoe.mirai.BotFactory;
-import net.mamoe.mirai.contact.Group;
 import net.mamoe.mirai.event.EventChannel;
 import net.mamoe.mirai.event.events.GroupMessageEvent;
-import net.mamoe.mirai.utils.BotConfiguration;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.CommandDispatcher;
@@ -34,9 +31,11 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import com.github.zyxgad.qqbot_mod.config.BotConfig;
 import com.github.zyxgad.qqbot_mod.config.UserConfig;
 import com.github.zyxgad.qqbot_mod.command.BindQQCommand;
+import com.github.zyxgad.qqbot_mod.command.QQBotCommand;
 import com.github.zyxgad.qqbot_mod.event.ServerTickHandler;
 import com.github.zyxgad.qqbot_mod.event.QQMessageListener;
 import com.github.zyxgad.qqbot_mod.util.Util;
+import com.github.zyxgad.qqbot_mod.util.BotHelper;
 
 public final class QQBotMod implements ModInitializer{
 	public static final UUID SERVER_UUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
@@ -46,16 +45,16 @@ public final class QQBotMod implements ModInitializer{
 	private MinecraftServer server = null;
 
 	private File folder;
-	private volatile Bot robot = null;
-	private volatile EventChannel eventChannel = null;
-	private int bot_offline_tick = 0;
-	private int bot_offline_tick_max = 20 * 5;
+	private BotHelper helper;
+	private EventChannel eventChannel = null;
 
 	public QQBotMod(){
 		this.folder = new File("qqbot_mod");
 		if(!this.folder.exists()){
 			this.folder.mkdirs();
 		}
+		this.helper = new BotHelper();
+		this.helper.start();
 		INSTANCE = this;
 	}
 
@@ -73,7 +72,7 @@ public final class QQBotMod implements ModInitializer{
 		ServerLifecycleEvents.SERVER_STARTING.register(this::onStarting);
 		ServerLifecycleEvents.SERVER_STARTED.register(this::onStarted);
 		CommandRegistrationCallback.EVENT.register(this::onRegisterCommands);
-		ServerLifecycleEvents.START_DATA_PACK_RELOAD.register(this::onReload);
+		ServerLifecycleEvents.START_DATA_PACK_RELOAD.register(this::onReloadCall);
 		ServerLifecycleEvents.SERVER_STOPPING.register(this::onStopping);
 		ServerTickEvents.START_SERVER_TICK.register(ServerTickHandler.INSTANCE::onTick);
 
@@ -82,8 +81,7 @@ public final class QQBotMod implements ModInitializer{
 
 	public void onStarting(MinecraftServer server){
 		this.server = server;
-		BotConfig.INSTANCE.reload();
-		UserConfig.INSTANCE.reload();
+		this.onReload();
 		this.loginBot();
 	}
 
@@ -93,88 +91,57 @@ public final class QQBotMod implements ModInitializer{
 
 	public void onRegisterCommands(CommandDispatcher<ServerCommandSource> dispatcher, boolean dedicated){
 		BindQQCommand.register(dispatcher);
+		QQBotCommand.register(dispatcher);
 	}
 
-	public void onReload(MinecraftServer server, ServerResourceManager serverResourceManager){
+	public void onReloadCall(MinecraftServer server, ServerResourceManager serverResourceManager){
 		LOGGER.info("QQBotMod is reloading...");
 		this.closeBot();
+		this.onReload();
+		this.loginBot();
+	}
+
+	public void onReload(){
 		BotConfig.INSTANCE.reload();
 		UserConfig.INSTANCE.reload();
-		this.loginBot();
+	}
+
+	public void onSave(){
+		BotConfig.INSTANCE.save();
+		UserConfig.INSTANCE.save();
 	}
 
 	public void onStopping(MinecraftServer server){
 		this.broadcastMessage("Minecraft server is stopping");
 		this.closeBot();
-		UserConfig.INSTANCE.save();
-		BotConfig.INSTANCE.save();
+		this.onSave();
 		this.server = null;
+		this.helper.interrupt();
 	}
 
 	public Bot getBot(){
-		return this.robot;
+		return this.helper.getBot();
 	}
 
 	public void loginBot(){
-		LOGGER.info("logging QQ bot...");
-		final long qqID = BotConfig.INSTANCE.getQQID();
-		final byte[] qqPassword = BotConfig.INSTANCE.getQQPassword();
-		LOGGER.info("QQID: " + qqID);
-		LOGGER.info("QQPassword: " + Util.bytesToHex(qqPassword));
-		this.robot = BotFactory.INSTANCE.newBot(qqID, qqPassword, new BotConfiguration(){{
-			this.fileBasedDeviceInfo(new File(QQBotMod.this.getDataFolder(), String.format("qqinfo_%d.json", qqID)).getAbsolutePath());
-			this.noNetworkLog();
-			this.noBotLog();
-		}});
-		this.robot.login();
-		this.bot_offline_tick = 0;
-		this.eventChannel = this.robot.getEventChannel()
-			.filterIsInstance(GroupMessageEvent.class)
-			.filter((GroupMessageEvent event)->{ return BotConfig.INSTANCE.hasGroupID(event.getSubject().getId()); });
-		this.eventChannel.registerListenerHost(new QQMessageListener());
-		LOGGER.info("logging QQ bot SUCCESS");
-		this.broadcastMessage("QQ bot is logged");
+		this.helper.loginBot();
+		this.eventChannel = this.helper.getBot().getEventChannel()
+				.filterIsInstance(GroupMessageEvent.class)
+				.filter((GroupMessageEvent event)->{ return BotConfig.INSTANCE.hasGroupID(event.getSubject().getId()); });
+			this.eventChannel.registerListenerHost(new QQMessageListener());
 	}
 
 	public void closeBot(){
-		if(this.robot != null){
-			this.broadcastMessage("QQ bot is logging out");
-			LOGGER.info("logging out QQ bot...");
-			Bot robot = this.robot;
-			this.robot = null;
-			this.eventChannel = null;
-			robot.closeAndJoin(null);
-			LOGGER.info("logout QQ bot SUCCESS");
-		}
+		this.eventChannel = null;
+		this.helper.closeBot();
 	}
 
 	public void checkBot(){
-		if(this.robot == null){
-			return;
-		}
-		if(!this.robot.isOnline()){
-			this.bot_offline_tick += 1;
-			if(this.bot_offline_tick >= this.bot_offline_tick_max){
-				LOGGER.info("re logging QQ bot...");
-				this.robot.login();
-				this.bot_offline_tick = 0;
-				LOGGER.info("re logging QQ bot SUCCESS");
-				this.broadcastMessage("QQ bot is re logged");
-			}
-		}
+		this.helper.checkBot();
 	}
 
 	public void broadcastMessage(final String msg){
-		if(this.robot == null){
-			return;
-		}
-		BotConfig.INSTANCE.getGroupIDs().forEach((Long gid)->{
-			Group group = this.robot.getGroup(gid.longValue());
-			if(group == null){
-				return;
-			}
-			group.sendMessage(msg);
-		});
+		this.helper.broadcastMessage(msg);
 	}
 
 	public void sendMessage(final GameProfile player, final String world, final String msg){
