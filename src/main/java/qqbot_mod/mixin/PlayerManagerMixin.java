@@ -17,8 +17,8 @@ import com.github.zyxgad.qqbot_mod.QQBotMod;
 public class PlayerManagerMixin {
 	@Inject(at=@At("HEAD"),
 		method="broadcastChatMessage(Lnet/minecraft/text/Text;Lnet/minecraft/network/MessageType;Ljava/util/UUID;)V",
-		cancellable=true)
-	public void broadcastChatMessage(Text text, MessageType mtype, UUID uuid, CallbackInfo info) {
+		cancellable=false)
+	private void broadcastChatMessage(Text text, MessageType mtype, UUID uuid, CallbackInfo info){
 		String msg = text.getString();
 		QQBotMod.INSTANCE.broadcastMessage(msg);
 	}

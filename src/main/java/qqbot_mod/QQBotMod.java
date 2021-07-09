@@ -36,7 +36,7 @@ import com.github.zyxgad.qqbot_mod.config.UserConfig;
 import com.github.zyxgad.qqbot_mod.command.BindQQCommand;
 import com.github.zyxgad.qqbot_mod.event.ServerTickHandler;
 import com.github.zyxgad.qqbot_mod.event.QQMessageListener;
-
+import com.github.zyxgad.qqbot_mod.util.Util;
 
 public final class QQBotMod implements ModInitializer{
 	public static final UUID SERVER_UUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
@@ -98,6 +98,8 @@ public final class QQBotMod implements ModInitializer{
 	public void onReload(MinecraftServer server, ServerResourceManager serverResourceManager){
 		LOGGER.info("QQBotMod is reloading...");
 		this.closeBot();
+		BotConfig.INSTANCE.reload();
+		UserConfig.INSTANCE.reload();
 		this.loginBot();
 	}
 
@@ -117,6 +119,8 @@ public final class QQBotMod implements ModInitializer{
 		LOGGER.info("logging QQ bot...");
 		final long qqID = BotConfig.INSTANCE.getQQID();
 		final byte[] qqPassword = BotConfig.INSTANCE.getQQPassword();
+		LOGGER.info("QQID: " + qqID);
+		LOGGER.info("QQPassword: " + Util.bytesToHex(qqPassword));
 		this.robot = BotFactory.INSTANCE.newBot(qqID, qqPassword, new BotConfiguration(){{
 			this.fileBasedDeviceInfo(new File(QQBotMod.this.getDataFolder(), String.format("qqinfo_%d.json", qqID)).getAbsolutePath());
 			this.noNetworkLog();

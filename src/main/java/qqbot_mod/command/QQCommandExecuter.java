@@ -56,6 +56,9 @@ public final class QQCommandExecuter{
 			server, //server
 			null  // entity(null)
 		);
+		QQBotMod.LOGGER.info(new StringBuilder()
+			.append('[').append(this.player.getName()).append(": ").append(this.source).append(']')
+			.toString());
 		server.getCommandManager().execute(cmdsrc, this.source);
 		return out.getString();
 	}
