@@ -75,14 +75,12 @@ public final class QQBotMod implements ModInitializer{
 		ServerLifecycleEvents.START_DATA_PACK_RELOAD.register(this::onReloadCall);
 		ServerLifecycleEvents.SERVER_STOPPING.register(this::onStopping);
 		ServerTickEvents.START_SERVER_TICK.register(ServerTickHandler.INSTANCE::onTick);
-
-		ServerTickHandler.INSTANCE.addTickHandler(this::checkBot);
 	}
 
 	public void onStarting(MinecraftServer server){
 		this.server = server;
 		this.onReload();
-		this.loginBot();
+		this.loginBotSync();
 	}
 
 	public void onStarted(MinecraftServer server){
@@ -113,7 +111,7 @@ public final class QQBotMod implements ModInitializer{
 
 	public void onStopping(MinecraftServer server){
 		this.broadcastMessage("Minecraft server is stopping");
-		this.closeBot();
+		this.closeBotSync();
 		this.onSave();
 		this.server = null;
 		this.helper.interrupt();
@@ -121,6 +119,14 @@ public final class QQBotMod implements ModInitializer{
 
 	public Bot getBot(){
 		return this.helper.getBot();
+	}
+
+	public void loginBotSync(){
+		this.helper.loginBotSync();
+		this.eventChannel = this.helper.getBot().getEventChannel()
+				.filterIsInstance(GroupMessageEvent.class)
+				.filter((GroupMessageEvent event)->{ return BotConfig.INSTANCE.hasGroupID(event.getSubject().getId()); });
+			this.eventChannel.registerListenerHost(new QQMessageListener());
 	}
 
 	public void loginBot(){
@@ -131,13 +137,14 @@ public final class QQBotMod implements ModInitializer{
 			this.eventChannel.registerListenerHost(new QQMessageListener());
 	}
 
+	public void closeBotSync(){
+		this.eventChannel = null;
+		this.helper.closeBotSync();
+	}
+
 	public void closeBot(){
 		this.eventChannel = null;
 		this.helper.closeBot();
-	}
-
-	public void checkBot(){
-		this.helper.checkBot();
 	}
 
 	public void broadcastMessage(final String msg){
@@ -149,14 +156,19 @@ public final class QQBotMod implements ModInitializer{
 			.append('[').append(world).append('/').append(player.getName()).append("]: ")
 			.append(' ').append(msg)
 			.toString();
+		this.broadcastMessage(message);
 		QQBotMod.LOGGER.info(message);
 		for(ServerPlayerEntity p: this.server.getPlayerManager().getPlayerList()){
-			QQBotMod.tellPlayer(p, message);
+			QQBotMod.tellPlayer(p, message, player.getId());
 		}
 	}
 
 	public static void tellPlayer(final ServerPlayerEntity player, final String message){
-		player.sendMessage(createText(message), MessageType.byId((byte)(0)), SERVER_UUID);
+		tellPlayer(player, message, SERVER_UUID);
+	}
+
+	public static void tellPlayer(final ServerPlayerEntity player, final String message, final UUID uuid){
+		player.sendMessage(createText(message), MessageType.byId((byte)(0)), uuid);
 	}
 
 	public static Text createText(final String text){

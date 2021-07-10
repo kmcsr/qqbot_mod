@@ -16,8 +16,6 @@ import com.github.zyxgad.qqbot_mod.config.UserConfig;
 public final class BotHelper extends Thread{
 	private BlockingQueue<Runnable> queue = new LinkedBlockingQueue<>();
 	private volatile Bot robot = null;
-	private volatile int bot_offline_tick = 0;
-	private volatile int bot_offline_tick_max = 20 * 5;
 
 	public BotHelper(){
 		super("BotHelper");
@@ -27,79 +25,53 @@ public final class BotHelper extends Thread{
 		return this.robot;
 	}
 
-	public void loginBotSync(){
-		if(this.robot != null){
-			throw new RuntimeException("need close bot first");
-		}
-		final long qqID = BotConfig.INSTANCE.getQQID();
-		final byte[] qqPassword = BotConfig.INSTANCE.getQQPassword();
-		QQBotMod.LOGGER.info("QQID: " + qqID);
-		QQBotMod.LOGGER.info("QQPassword: " + Util.bytesToHex(qqPassword));
-		this.robot = BotFactory.INSTANCE.newBot(qqID, qqPassword, new BotConfiguration(){{
+	public static Bot createBot(long qqID, byte[] qqPassword){
+		return BotFactory.INSTANCE.newBot(qqID, qqPassword, new BotConfiguration(){{
 			this.setWorkingDir(QQBotMod.INSTANCE.getDataFolder());
 			this.fileBasedDeviceInfo(String.format("qqinfo_%d.json", qqID));
 			this.noNetworkLog();
 			this.noBotLog();
+			this.setAutoReconnectOnForceOffline(true);
 		}});
+	}
+
+	public void loginBotSync(){
+		if(this.robot == null){
+			final long qqID = BotConfig.INSTANCE.getQQID();
+			final byte[] qqPassword = BotConfig.INSTANCE.getQQPassword();
+			QQBotMod.LOGGER.info("QQID: " + qqID);
+			QQBotMod.LOGGER.info("QQPassword: " + Util.bytesToHex(qqPassword));
+			this.robot = BotHelper.createBot(qqID, qqPassword);
+		}
 		QQBotMod.LOGGER.info("logging QQ bot...");
 		this.robot.login();
-		this.bot_offline_tick = 0;
 		QQBotMod.LOGGER.info("logging QQ bot SUCCESS");
 		this.broadcastMessage("QQ bot is logged");
 	}
 
 	public void loginBot(){
-		if(this.robot != null){
-			throw new RuntimeException("need close bot first");
-		}
 		final long qqID = BotConfig.INSTANCE.getQQID();
 		final byte[] qqPassword = BotConfig.INSTANCE.getQQPassword();
-		QQBotMod.LOGGER.info("QQID: " + qqID);
-		QQBotMod.LOGGER.info("QQPassword: " + Util.bytesToHex(qqPassword));
-		this.robot = BotFactory.INSTANCE.newBot(qqID, qqPassword, new BotConfiguration(){{
-			this.setWorkingDir(QQBotMod.INSTANCE.getDataFolder());
-			this.fileBasedDeviceInfo(String.format("qqinfo_%d.json", qqID));
-			this.noNetworkLog();
-			this.noBotLog();
-		}});
-		queue.add(()->{
-			QQBotMod.LOGGER.info("logging QQ bot...");
-			this.robot.login();
-			this.bot_offline_tick = 0;
-			QQBotMod.LOGGER.info("logging QQ bot SUCCESS");
-			this.broadcastMessage("QQ bot is logged");
-		});
+		this.robot = BotHelper.createBot(qqID, qqPassword);
+		queue.add(this::loginBotSync);
+	}
+
+	public void closeBotSync(){
+		if(this.robot != null){
+			this.broadcastMessage("QQ bot is logging out");
+			QQBotMod.LOGGER.info("logging out QQ bot...");
+			Bot robot = this.robot;
+			this.robot = null;
+			robot.closeAndJoin(null);
+			QQBotMod.LOGGER.info("logout QQ bot SUCCESS");
+		}
 	}
 
 	public void closeBot(){
 		if(this.robot == null){
 			return;
 		}
-		queue.add(()->{
-			if(this.robot != null){
-				this.broadcastMessage("QQ bot is logging out");
-				QQBotMod.LOGGER.info("logging out QQ bot...");
-				Bot robot = this.robot;
-				this.robot = null;
-				robot.closeAndJoin(null);
-				QQBotMod.LOGGER.info("logout QQ bot SUCCESS");
-			}
-		});
-	}
-
-	public void checkBot(){
-		if(this.robot != null && !this.robot.isOnline()){
-			this.bot_offline_tick += 1;
-			if(this.bot_offline_tick >= this.bot_offline_tick_max){
-				queue.add(()->{
-					QQBotMod.LOGGER.info("re logging QQ bot...");
-					this.robot.login();
-					this.bot_offline_tick = 0;
-					QQBotMod.LOGGER.info("re logging QQ bot SUCCESS");
-					this.broadcastMessage("QQ bot is re logged");
-				});
-			}
-		}
+		queue.add(this::closeBotSync);
 	}
 
 	public void broadcastMessage(final String msg){
@@ -107,7 +79,7 @@ public final class BotHelper extends Thread{
 			return;
 		}
 		BotConfig.INSTANCE.getGroupIDs().forEach((Long gid)->{
-			Group group = BotHelper.this.robot.getGroup(gid.longValue());
+			Group group = this.robot.getGroup(gid.longValue());
 			if(group != null){
 				group.sendMessage(msg);
 			}

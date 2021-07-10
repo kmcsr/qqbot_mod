@@ -73,14 +73,19 @@ public final class QQMessageListener extends SimpleListenerHost{
 				break;
 			}
 			case ':':{
+				final String rmsg = QQMessageListener.execute(sender, message);
 				event.getSubject().sendMessage(new MessageChainBuilder()
 					.append(new QuoteReply(chain))
-					.append("[McBot]")
-					.append("功能开发中")
+					.append("[McBot]\n")
+					.append(rmsg)
 					.build());
 				break;
 			}
 		}
 		return ListeningStatus.LISTENING;
+	}
+
+	public static String execute(final Member sender, final String source){
+		return "功能开发中";
 	}
 }
